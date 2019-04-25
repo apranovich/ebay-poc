@@ -1,0 +1,175 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="https://unpkg.com/tachyons@4.10.0/css/tachyons.min.css"/>
+        <style>
+            .auction-item {
+                cursor: pointer;
+            }
+            input {
+                width: 12rem;
+            }
+        </style>
+    </head>
+    <body class="pa3 ph4-ns">
+        <h3 class="f5 mb4 pb2 bb">Top Auctions By The Most Bids Placed</h3>
+        <select name="categories_mostbids" id="categories_mostbids"></select>
+        <input type="number" id="mostbids_price" placeholder="MaxPrice USD (optional)">
+        <input type="text" id="mostbids_keyword" placeholder="Keyword (optional)">
+        <button onclick="getTopItemsByBidsFromCategory()">Get Top 5</button>
+        <div id="topByBids" class="flex"></div>
+
+        <h3 class="f5 mb4 pb2 bb">Top Auctions By The Most People Watching</h3>
+        <select name="categories_mostwatchable" id="categories_mostwatchable"></select>
+        <input type="number" id="mostwatchable_price" placeholder="MaxPrice USD (optional)">
+        <input type="text" id="mostwatchable_keyword" placeholder="Keyword (optional)">
+        <button onclick="getTopWatchedItemsFromCategory()">Get Top 5</button>
+        <div id="mostWatchable" class="flex"></div>
+
+        <script>
+            function loadJSONP(url, parameter="callback") {
+                var prop = "loadJSONP_callback" + loadJSONP.counter++;
+                var script = document.createElement("script");
+                function withCleanUp(resolve) {
+                    return (data) => {
+                        window[prop] = null;
+                        document.head.removeChild(script);
+                        resolve(data);
+                    }
+                }
+                return new Promise((resolve, reject) => {
+                    window[prop] = withCleanUp(resolve);
+                    script.onerror = withCleanUp(reject);
+
+                    script.src = url+"&"+parameter+"="+prop;
+                    document.head.appendChild(script);
+                });
+            }
+            loadJSONP.counter = 0;
+
+            function fillCategoriesDropdown(categories) {
+                const select1 = document.getElementById('categories_mostbids');
+                const select2 = document.getElementById('categories_mostwatchable');
+
+                for ( let i = 0; i < categories.length; i++ ) {
+                    option = document.createElement( 'option' );
+                    option.text = categories[i].name;
+                    option.value = categories[i].id;
+                    select1.add( option );
+                }
+
+                for ( let i = 0; i < categories.length; i++ ) {
+                    option = document.createElement( 'option' );
+                    option.text = categories[i].name;
+                    option.value = categories[i].id;
+                    select2.add( option );
+                }
+            }
+
+            function getCurrentSelectValue(id) {
+                return document.getElementById(id).value;
+            }
+
+            function getInputValue(id) {
+                return document.getElementById(id).value;
+            }
+
+            function ifAnyItemsFound(response) {
+                return response && response.searchResult && response.searchResult[0] && response.searchResult[0]['@count'] !== '0';
+            }
+
+            function renderItems(items, id) {
+                const layoutsArray = items.map(x =>
+                    `<div onclick="window.open('${x.viewItemURL}', '_blank');"class="auction-item w-25 tc grow bg-washed-green br3 pa3 ma2 dib bw2 shadow-5">
+                        <img src="${x.galleryURL[0]}" alt="${x.title[0]}" />
+                        <div>
+                            <h3>${x.title[0]}</h3>
+                            <p>${x.subtitle ? x.subtitle[0] : ''}</p>
+                            <p>Category: ${x.primaryCategory[0].categoryName[0]}</p>
+                            <p>${x.location[0]}</p>
+                            <p>How many people watch for this item: ${x.listingInfo[0].watchCount ? x.listingInfo[0].watchCount[0] : 0}</p>
+                            <p>How many bids placed: ${x.sellingStatus[0].bidCount ? x.sellingStatus[0].bidCount[0] : 0}</p>
+                            <p>Current price: ${x.sellingStatus[0].convertedCurrentPrice[0].__value__} ${x.sellingStatus[0].convertedCurrentPrice[0]['@currencyId']}</p>
+                            <p>Time left: ${moment(moment.duration(x.sellingStatus[0].timeLeft[0]).as('milliseconds')).format('H[h] m[m] ss[s]')}</p>
+                        </div>
+                    </div>`);
+                const itemsToRender = layoutsArray.join('');
+
+                const elementToRenderInto = document.getElementById(id);
+                elementToRenderInto.innerHTML = itemsToRender ? itemsToRender : '<h2>No results found.</h2>';
+            }
+
+            function fetchEbayAPIRequest({ categoryId, serviceToUse, priceFilter, keywordFilter, elementToRenderInto, sortOrder }) {
+                const url = `http://svcs.ebay.com/services/search/FindingService/v1?`
+                    + `OPERATION-NAME=${serviceToUse}&`
+                    + `SERVICE-VERSION=1.0.0&`
+                    + `SECURITY-APPNAME=ArtsiomP-auctions-PRD-0ea9e4abd-bb88d06e&`
+                    + `GLOBAL-ID=EBAY-US&`
+                    + `RESPONSE-DATA-FORMAT=JSON&`
+                    + `REST-PAYLOAD&`
+                    + `paginationInput.entriesPerPage=5&`
+                    + `categoryId=${categoryId}&`
+                    + `itemFilter(0).name=ListingType&`
+                    + `itemFilter(0).value=Auction&`
+                    + `${priceFilter}`
+                    + `${keywordFilter}`
+                    + `sortOrder=${sortOrder}`;
+
+                loadJSONP(url, 'callback')
+                    .then(data => {
+                        const response = data[`${serviceToUse}Response`][0];
+                        return ifAnyItemsFound(response)
+                            ? response.searchResult[0].item
+                            : [];
+                    })
+                    .then(items => renderItems(items, elementToRenderInto))
+            }
+
+            function getTopItemsByBidsFromCategory() {
+                const categoryId = getCurrentSelectValue('categories_mostbids');
+
+                const price = getInputValue('mostbids_price');
+                const priceFilter = price
+                    ? `itemFilter(1).name=MaxPrice&itemFilter(1).value=${price}&itemFilter(1).paramName=Currency&itemFilter(1).paramValue=USD&`
+                    : '';
+
+                const keyword = getInputValue('mostbids_keyword');
+                const serviceToUse = keyword ? 'findItemsAdvanced' : 'findItemsByCategory';
+                const keywordFilter = keyword ? `keywords=${keyword}&` : '';
+
+                fetchEbayAPIRequest({
+                    categoryId, serviceToUse,
+                    priceFilter, keywordFilter,
+                    elementToRenderInto: 'topByBids',
+                    sortOrder: 'BidCountMost',
+                });
+            }
+
+            function getTopWatchedItemsFromCategory() {
+                const categoryId = getCurrentSelectValue('categories_mostwatchable');
+
+                const price = getInputValue('mostwatchable_price');
+                const priceFilter = price
+                    ? `itemFilter(1).name=MaxPrice&itemFilter(1).value=${price}&itemFilter(1).paramName=Currency&itemFilter(1).paramValue=USD&`
+                    : '';
+
+                const keyword = getInputValue('mostwatchable_keyword');
+                const serviceToUse = keyword ? 'findItemsAdvanced' : 'findItemsByCategory';
+                const keywordFilter = keyword ? `keywords=${keyword}&` : '';
+
+                fetchEbayAPIRequest({
+                    categoryId, serviceToUse,
+                    priceFilter, keywordFilter,
+                    elementToRenderInto: 'mostWatchable',
+                    sortOrder: 'WatchCountDecreaseSort',
+                });
+            }
+
+            loadJSONP(`http://open.api.ebay.com/Shopping?appid=ArtsiomP-auctions-PRD-0ea9e4abd-bb88d06e&callname=GetCategoryInfo&version=967&siteid=0&responseencoding=JSON&CategoryID=-1&IncludeSelector=ChildCategories`, 'callbackname')
+                .then(data => data.CategoryArray.Category.slice(1).map(x => ({name: x.CategoryName, id: x.CategoryID })))
+                .then(options => fillCategoriesDropdown(options));
+
+        </script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js"></script>
+
+    </body>
+</html>

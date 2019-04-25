@@ -99,7 +99,7 @@
             }
 
             function fetchEbayAPIRequest({ categoryId, serviceToUse, priceFilter, keywordFilter, elementToRenderInto, sortOrder }) {
-                const url = `http://svcs.ebay.com/services/search/FindingService/v1?`
+                const url = `https://svcs.ebay.com/services/search/FindingService/v1?`
                     + `OPERATION-NAME=${serviceToUse}&`
                     + `SERVICE-VERSION=1.0.0&`
                     + `SECURITY-APPNAME=ArtsiomP-auctions-PRD-0ea9e4abd-bb88d06e&`
@@ -164,7 +164,7 @@
                 });
             }
 
-            loadJSONP(`http://open.api.ebay.com/Shopping?appid=ArtsiomP-auctions-PRD-0ea9e4abd-bb88d06e&callname=GetCategoryInfo&version=967&siteid=0&responseencoding=JSON&CategoryID=-1&IncludeSelector=ChildCategories`, 'callbackname')
+            loadJSONP(`https://api.ebay.com/Shopping?appid=ArtsiomP-auctions-PRD-0ea9e4abd-bb88d06e&callname=GetCategoryInfo&version=967&siteid=0&responseencoding=JSON&CategoryID=-1&IncludeSelector=ChildCategories`, 'callbackname')
                 .then(data => data.CategoryArray.Category.slice(1).map(x => ({name: x.CategoryName, id: x.CategoryID })))
                 .then(options => fillCategoriesDropdown(options));
 
